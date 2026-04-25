@@ -1,16 +1,18 @@
 #pragma once
 #include "sim.h"
 #include "logger.h"
+#include "noise.h"
 #include <yaml-cpp/yaml.h>
 #include <cstdio>
 #include <string>
 
-// Second-order spring-mass-damper:  m*x'' + c*x' + k*x = 0
+// Second-order spring-mass-damper:  m*x'' + c*x' + k*x = F_noise
 // States: pos (position), vel (velocity)
+// Noise is injected as an additive force on the velocity derivative.
 class SpringMassDamper : public Block {
 public:
-    std::string name;       // set by main.cpp after construction
-    std::string outputDir;  // set by main.cpp after construction
+    std::string name;
+    std::string outputDir;
     LogFormat   logFmt = LogFormat::CSV;
 
     SpringMassDamper()
@@ -32,7 +34,11 @@ public:
         vel0_       = m["initial_velocity"].as<double>(vel0_);
         double rHz  = m["report_rate_hz"].as<double>(1.0 / reportDt_);
         reportDt_   = 1.0 / rHz;
+        noise_.loadConfig(cfg["noise"]);
     }
+
+    // Called by the MC loop before each run to reseed noise deterministically.
+    void seed(uint64_t s) { noise_.seed(s); }
 
     void initialize() override {
         pos = pos0_;
@@ -42,17 +48,18 @@ public:
                         name.c_str(), mass_, damping_, stiffness_);
             std::printf("%-8s  %-12s  %-12s\n", "time(s)", "position(m)", "velocity(m/s)");
             std::printf("%-38s\n", "--------------------------------------");
-
-            if (!outputDir.empty()) {
-                std::string base = outputDir + "/" + (name.empty() ? "smd" : name);
-                logger_.open(base, {"t", "pos", "vel"}, logFmt);
-            }
+        }
+        if (!outputDir.empty()) {
+            std::string base = outputDir + "/" + (name.empty() ? "smd" : name);
+            logger_.open(base, {"t", "pos", "vel"}, logFmt);
         }
     }
 
     void update() override {
         pos_dot = vel;
-        vel_dot = -(damping_ / mass_) * vel - (stiffness_ / mass_) * pos;
+        vel_dot = -(damping_ / mass_) * vel
+                  -(stiffness_ / mass_) * pos
+                  + noise_.sample() / mass_;
     }
 
     void report() override {
@@ -70,7 +77,8 @@ public:
     double pos, vel, pos_dot, vel_dot;
 
 private:
-    double  mass_, damping_, stiffness_;
-    double  pos0_, vel0_, reportDt_;
-    Logger  logger_;
+    double   mass_, damping_, stiffness_;
+    double   pos0_, vel0_, reportDt_;
+    Logger   logger_;
+    NoiseGen noise_;
 };

@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 find_package(yaml-cpp REQUIRED)
+find_package(Eigen3 REQUIRED NO_MODULE)
 
 # ── OSK kernel (static library shared by all simulations) ────────────────────
 add_library(osk STATIC
@@ -14,6 +15,7 @@ add_library(osk STATIC
     osk/sim.cpp
 )
 target_include_directories(osk PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/osk)
+target_link_libraries(osk PUBLIC Eigen3::Eigen yaml-cpp)
 
 # ── Examples ──────────────────────────────────────────────────────────────────
 add_subdirectory(examples/ex_0)

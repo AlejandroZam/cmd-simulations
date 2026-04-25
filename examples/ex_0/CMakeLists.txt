@@ -1,6 +1,6 @@
 add_executable(ex_0 main.cpp)
 
-target_link_libraries(ex_0 PRIVATE osk yaml-cpp)
+target_link_libraries(ex_0 PRIVATE osk)
 
 target_include_directories(ex_0 PRIVATE
     ${CMAKE_SOURCE_DIR}/osk

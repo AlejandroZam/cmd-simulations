@@ -3,9 +3,13 @@ simulation:
   dt: 0.01
   integration_method: RK4   # EULER, RK2, or RK4
 
+monte_carlo:
+  runs: 3          # number of runs; seed = base_seed + run_number
+  base_seed: 42    # deterministic: same base_seed always gives same results
+
 output:
   dir: "output"
-  format: csv                # csv or bin
+  format: csv      # csv or bin
 
 models:
   - name: smd_heavy

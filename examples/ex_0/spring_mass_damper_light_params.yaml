@@ -5,3 +5,8 @@ model:
   initial_position: 0.5
   initial_velocity: 1.0
   report_rate_hz: 2.0
+
+noise:
+  distribution: uniform    # none | gaussian | uniform
+  min: -0.02
+  max:  0.02
