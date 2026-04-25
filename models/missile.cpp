@@ -1,5 +1,4 @@
 #include "missile.h"
-#include "target.h"
 #include "sim.h"
 #include "yaml_eigen.h"
 #include <yaml-cpp/yaml.h>

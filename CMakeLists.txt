@@ -56,17 +56,24 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/osk
 )
 
-# ── Models (static library — built-in reference implementations) ──────────────
-add_library(models STATIC
-    models/spring_mass_damper.cpp
-    models/missile.cpp
-    models/target.cpp
+# ── Model dependencies ────────────────────────────────────────────────────────
+# Each model must be checked out in external/ before running cmake.
+# See cmake/define_dependency.cmake for the error message + clone instructions.
+define_dependency(
+    NAME    cmd-model-smd
+    REPO    https://github.com/AlejandroZam/cmd-model-smd.git
+    VERSION 0.1.0
 )
-target_include_directories(models PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/models>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/models>
+define_dependency(
+    NAME    cmd-model-target
+    REPO    https://github.com/AlejandroZam/cmd-model-target.git
+    VERSION 0.1.0
 )
-target_link_libraries(models PUBLIC osk)
+define_dependency(
+    NAME    cmd-model-missile
+    REPO    https://github.com/AlejandroZam/cmd-model-missile.git
+    VERSION 0.1.0
+)
 
 # ── Scenario runner ───────────────────────────────────────────────────────────
 add_subdirectory(src)

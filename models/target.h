@@ -1,5 +1,6 @@
 #pragma once
 #include "block.h"
+#include "trackable.h"
 #include "noise.h"
 #include <Eigen/Dense>
 #include <string>
@@ -7,7 +8,8 @@
 
 // Constant-velocity ground vehicle (z = 0 enforced).
 // Noise channels noise.lateral_x / noise.lateral_y simulate terrain effects.
-class Target : public Block {
+// Implements Trackable so Missile can hold a Trackable* without knowing this type.
+class Target : public Block, public Trackable {
 public:
     Target();
 
