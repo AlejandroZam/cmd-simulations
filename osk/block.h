@@ -19,6 +19,9 @@ public:
     // which stage it is in (0 = first stage, 1 = second, ...).
     virtual void initialize() {}
 
+    // Override to reseed all NoiseGen members deterministically per MC run.
+    virtual void seed(uint64_t /*s*/) {}
+
     // Called 4x per time step (RK4) to compute state derivatives.
     // Use State::sample() to gate discrete operations.
     virtual void update()     {}

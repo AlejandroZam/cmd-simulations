@@ -93,9 +93,8 @@ int main(int argc, char* argv[]) {
             b->setConfigPath(e.config);
             applyMeta(b, e.name, runOutDir, logFmt);
 
-            // Seed noise deterministically for this run
-            if (auto* smd = dynamic_cast<SpringMassDamper*>(b))
-                smd->seed(runSeed);
+            // Seed noise deterministically for this run (virtual dispatch)
+            b->seed(runSeed);
 
             allModels.push_back(b);
             stage0.push_back(b);
