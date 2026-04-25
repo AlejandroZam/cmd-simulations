@@ -19,6 +19,11 @@ int main(int argc, char* argv[]) {
     double tmax           = cfg["simulation"]["tmax"].as<double>();
     double dt             = cfg["simulation"]["dt"].as<double>();
     double reportInterval = cfg["simulation"]["report_interval"].as<double>();
+    std::string methodStr = cfg["simulation"]["integration_method"].as<std::string>("RK4");
+
+    IntegMethod method = IntegMethod::RK4;
+    if      (methodStr == "EULER") method = IntegMethod::EULER;
+    else if (methodStr == "RK2")   method = IntegMethod::RK2;
 
     double mass      = cfg["model"]["mass"].as<double>();
     double damping   = cfg["model"]["damping"].as<double>();
@@ -36,7 +41,7 @@ int main(int argc, char* argv[]) {
     std::vector<std::vector<Block*>> vStage  = { stage0 };
     double dts[] = { dt };
 
-    Sim* sim = new Sim(dts, tmax, vStage);
+    Sim* sim = new Sim(dts, tmax, vStage, method);
     sim->run();
 
     delete sim;

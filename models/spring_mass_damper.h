@@ -21,7 +21,7 @@ public:
         vel_dot = -(damping_ / mass_) * vel - (stiffness_ / mass_) * pos;
     }
 
-    void rpt() override {
+    void report() override {
         if (State::sample(reportInterval_) || State::tickfirst || State::ticklast)
             std::printf("%8.4f  pos: %10.6f  vel: %10.6f\n", State::t, pos, vel);
     }

@@ -2,6 +2,7 @@ simulation:
   tmax: 10.0          # total simulation time (seconds)
   dt: 0.01            # integration time-step (seconds)
   report_interval: 0.5  # console output every N seconds
+  integration_method: RK4  # EULER, RK2, or RK4
 
 model:
   mass: 1.0           # kg

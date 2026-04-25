@@ -5,8 +5,9 @@
 class Block {
 public:
     virtual ~Block();
-    virtual void update() {}
-    virtual void rpt()    {}
+    virtual void initialize() {}
+    virtual void update()     {}
+    virtual void report()     {}
 
     void addIntegrator(double* x, double* xd);
 
