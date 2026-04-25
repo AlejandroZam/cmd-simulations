@@ -14,7 +14,12 @@ std::vector<State*> Sim::collectStates(std::vector<Block*>& stage) {
 }
 
 void Sim::callInitialize(std::vector<Block*>& stage) {
-    for (auto* b : stage) b->initialize();
+    for (auto* b : stage) {
+        if (!b->configPath.empty())
+            b->loadConfig(b->configPath);
+        b->initialize();
+        b->initCount++;
+    }
 }
 
 void Sim::callUpdate(std::vector<Block*>& stage) {
