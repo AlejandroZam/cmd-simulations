@@ -1,0 +1,7 @@
+model:
+  mass: 0.5
+  damping: 0.1
+  stiffness: 4.0
+  initial_position: 0.5
+  initial_velocity: 1.0
+  report_rate_hz: 2.0

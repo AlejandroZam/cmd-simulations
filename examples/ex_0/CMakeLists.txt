@@ -8,13 +8,14 @@ target_include_directories(ex_0 PRIVATE
 )
 
 # Copy yaml configs next to the binary so they're found at runtime
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/params.yaml
-    ${CMAKE_CURRENT_BINARY_DIR}/params.yaml
-    COPYONLY
+foreach(yaml_file
+    params.yaml
+    spring_mass_damper_heavy_params.yaml
+    spring_mass_damper_light_params.yaml
 )
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/spring_mass_damper_params.yaml
-    ${CMAKE_CURRENT_BINARY_DIR}/spring_mass_damper_params.yaml
-    COPYONLY
-)
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/${yaml_file}
+        ${CMAKE_CURRENT_BINARY_DIR}/${yaml_file}
+        COPYONLY
+    )
+endforeach()

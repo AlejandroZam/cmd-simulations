@@ -1,4 +1,19 @@
 simulation:
-  tmax: 10.0              # total simulation time (seconds)
-  dt: 0.01               # integration time-step (seconds)
-  integration_method: RK4  # EULER, RK2, or RK4
+  tmax: 10.0
+  dt: 0.01
+  integration_method: RK4   # EULER, RK2, or RK4
+
+output:
+  dir: "output"
+  format: csv                # csv or bin
+
+models:
+  - name: smd_heavy
+    type: SpringMassDamper
+    config: spring_mass_damper_heavy_params.yaml
+    enabled: true
+
+  - name: smd_light
+    type: SpringMassDamper
+    config: spring_mass_damper_light_params.yaml
+    enabled: true
