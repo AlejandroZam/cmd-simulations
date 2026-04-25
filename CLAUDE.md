@@ -5,24 +5,46 @@ An implementation of **C++ Model Developer (CMD)** — a U.S. Army AMRDEC open-s
 
 ## Directory layout
 ```
-simulations/
-└── cmd/
-    ├── CMakeLists.txt           ← root build; add add_subdirectory() here for new examples
-    ├── osk/                     ← Object-Oriented Simulation Kernel (do not modify)
-    │   ├── state.h/cpp          ← State class
-    │   ├── block.h/cpp          ← Block base class + ACCESS_FN macro
-    │   └── sim.h/cpp            ← Sim executive + IntegMethod enum
-    ├── models/                  ← reusable model headers (one model = one .h file)
-    │   └── spring_mass_damper.h
-    └── examples/
-        └── ex_0/                ← spring-mass-damper demo
-            ├── main.cpp
-            ├── params.yaml                    ← sim-level config (tmax, dt, method)
-            ├── spring_mass_damper_params.yaml ← model-level config (physics, rates)
-            └── CMakeLists.txt
+CMD/                              ← repo root (cmd-simulations, tagged v1.0.0)
+├── CMakeLists.txt                ← root build; version 1.0.0, OSK install rules,
+│                                    define_dependency calls for all models
+├── cmake/
+│   ├── define_dependency.cmake   ← fetch-or-error model resolver
+│   └── osk-config.cmake.in       ← installed package config template
+├── osk/                          ← Object-Oriented Simulation Kernel (do not modify)
+│   ├── state.h/cpp               ← State class
+│   ├── block.h/cpp               ← Block base class + ACCESS_FN macro
+│   ├── sim.h/cpp                 ← Sim executive + IntegMethod enum
+│   ├── trackable.h               ← Abstract interface: pos3()/vel3() for seeker models
+│   ├── factory.h                 ← ModelFactory — register and create Block subtypes
+│   ├── logger.h                  ← Signal-registration CSV/binary logger
+│   ├── noise.h                   ← NoiseGen — Gaussian/Uniform/Laplace/Weibull
+│   ├── montecarlo.h              ← MonteCarlo run control
+│   └── yaml_eigen.h              ← yamlToVector<Eigen::VectorXd> helper
+├── src/
+│   ├── CMakeLists.txt
+│   └── main.cpp                  ← Generic scenario runner (one binary for all scenarios)
+├── external/                     ← gitignored; model repos checked out here
+│   ├── cmd-model-smd/            ← github.com/AlejandroZam/cmd-model-smd    v0.1.0
+│   ├── cmd-model-target/         ← github.com/AlejandroZam/cmd-model-target v0.1.0
+│   └── cmd-model-missile/        ← github.com/AlejandroZam/cmd-model-missile v0.1.0
+├── INPUT_DATA/                   ← committed; all scenario config files
+│   ├── ex_0/
+│   │   ├── scenario.yaml         ← sim settings + model list (the ONE input to sim)
+│   │   ├── smd_heavy_params.yaml
+│   │   └── smd_light_params.yaml
+│   └── ex_1/
+│       ├── scenario.yaml
+│       ├── missile_params.yaml
+│       └── target_params.yaml
+├── OUTPUT_DATA/                  ← gitignored; written at runtime by sim
+│   ├── ex_0/run0/ … run2/
+│   └── ex_1/run0/ … run2/
+└── tools/
+    └── visualise_ex1.py          ← matplotlib visualiser for ex_1 output
 ```
 
-## OSK architecture (3 classes)
+## OSK architecture
 
 ### State (`osk/state.h`)
 Wraps a single integrator state variable and its derivative. Managed internally by Block.
@@ -38,221 +60,328 @@ Wraps a single integrator state variable and its derivative. Managed internally 
 ### Block (`osk/block.h`)
 Abstract base class for all models. Derive from this.
 - `void addIntegrator(double* x, double* xd)` — registers a state/derivative pair. Call in constructor.
-- `void setConfigPath(const std::string& path)` — sets the YAML path the kernel passes to `loadConfig()` at each stage start
-- `int initCount` — incremented by the kernel after each `initialize()` call; use in `initialize()` to distinguish stage 0, 1, 2, …
-- `std::string configPath` — set via `setConfigPath()`
-- `virtual void loadConfig(const std::string& path)` — override to load model YAML; called automatically by kernel before each `initialize()`
-- `virtual void initialize()` — called once per stage before the time loop; use `initCount` to distinguish stages
-- `virtual void update()` — define state derivatives here, called 4× per time step (RK4); gate discrete logic with `State::sample()`
-- `virtual void report()` — called once per full time step after integration; gate output with `State::sample()`, `tickfirst`, `ticklast`
-- `ACCESS_FN(type, var)` macro — defined in block.h; generates a read-only accessor `var_()` for model-to-model communication:
+- `void setConfigPath(const std::string& path)` — sets the YAML path the kernel passes to `loadConfig()`
+- `int initCount` — incremented by the kernel after each `initialize()` call
+- `std::string name`, `std::string outputDir`, `LogFormat logFmt` — set by main.cpp before `Sim::run()`
+- `virtual void loadConfig(const std::string& path)` — override to load model YAML
+- `virtual void initialize()` — called once per stage; use `initCount` to distinguish stages
+- `virtual void update()` — define state derivatives; called 4× per step (RK4)
+- `virtual void report()` — called once per full time step after integration
+- `virtual void seed(uint64_t s)` — override to reseed all NoiseGen members per MC run
+- `ACCESS_FN(type, var)` macro — generates a read-only accessor `var_()`:
   ```cpp
   ACCESS_FN(double, pos)   // generates: double pos_() const { return pos; }
   ```
 
+### Trackable (`osk/trackable.h`)
+Abstract interface for anything a seeker/guidance model can track.
+```cpp
+class Trackable {
+public:
+    virtual const Eigen::Vector3d& pos3() const = 0;
+    virtual const Eigen::Vector3d& vel3() const = 0;
+};
+```
+- `Target` implements `Trackable`
+- `Missile` holds a `Trackable*` — no direct coupling to `Target`
+- When FastDDS pub/sub lands, this pointer is replaced by a topic subscription
+
 ### Sim (`osk/sim.h`)
 Simulation executive — runs the train-of-objects time loop.
 - `static int stop` — set by models to control flow:
-  - `Sim::stop = -1` → terminate simulation at end of current time step
-  - `Sim::stop > 0`  → advance to next stage at end of current time step
-- Constructor: `Sim(double* dts, double tmax, vector<vector<Block*>>& vStage, IntegMethod method = IntegMethod::RK4)`
-  - `dts`: array of time-steps, one per stage
-  - `vStage`: outer vector = stages, inner vector = models in that stage
-  - `method`: `IntegMethod::EULER`, `IntegMethod::RK2`, or `IntegMethod::RK4`
-- `void run()` — executes all stages
+  - `Sim::stop = -1` → terminate at end of current time step
+  - `Sim::stop > 0`  → advance to next stage
+- Constructor: `Sim(double* dts, double tmax, vector<vector<Block*>>& vStage, IntegMethod method)`
 
 ## Integration algorithms
-Selectable via `IntegMethod` enum or `integration_method` in `params.yaml`:
+Selectable via `integration_method` in `scenario.yaml`:
 - **`EULER`** — forward Euler (1st order)
 - **`RK2`** — Heun's method (2nd order)
 - **`RK4`** — 4th-order Runge-Kutta (default)
 
-Per RK4 time step: save `x0` → k1 (`substep=false`) → k2 → k3 → k4 (`substep=true`) → combine → call `report()`.
+## Model dependency system (`cmake/define_dependency.cmake`)
 
-## Kernel call sequence per stage
-```
-loadConfig()      ← reads model YAML (called if configPath is set)
-initialize()      ← set ICs; initCount tells you which stage (0, 1, 2, ...)
-  tickfirst=true
-  update() + report()   ← initial tick
-  tickfirst=false
-  ── time loop ──
-    step() [Euler/RK2/RK4]
-    report()
-  ── end loop ──
-initCount++
+Models must be checked out in `external/` before running cmake — **no automatic fetching**.
+If a model is missing, cmake aborts with the exact clone command:
+
+```cmake
+# In CMakeLists.txt:
+define_dependency(
+    NAME    cmd-model-missile
+    REPO    https://github.com/AlejandroZam/cmd-model-missile.git
+    VERSION 0.1.0
+)
 ```
 
-## Train-of-objects (multi-stage) pattern
+**Error output when missing:**
 ```
-STATE → inside BLOCK → inside STAGE (vector<Block*>) → inside SIMULATION (vector<vector<Block*>>)
-```
-- Multiple models per stage: push them all into the stage vector; they execute in order
-- Stage transition: set `Sim::stop = 1` inside `update()`; use `State::sample(State::EVENT, t)` for a one-time trigger
-- Models reused across stages pick up from previous state; use `initCount` in `initialize()` to re-init selectively
+CMake Error: [define_dependency] Missing model: cmd-model-missile v0.1.0
 
-## Model-to-model interaction pattern (from CMD spec §4.4)
+  Not found in: /path/to/CMD/external/cmd-model-missile
+
+  Clone it with:
+    git clone https://github.com/AlejandroZam/cmd-model-missile.git --branch v0.1.0 external/cmd-model-missile
+
+  Then re-run cmake.
+```
+
+**Success output:**
+```
+-- [define_dependency] cmd-model-missile v0.1.0: found at .../external/cmd-model-missile
+```
+
+## Scenario YAML format (`INPUT_DATA/<name>/scenario.yaml`)
+
+This is the single file passed to `sim`. Model configs are resolved relative to the scenario directory.
+
+```yaml
+simulation:
+  tmax: 30.0
+  dt: 0.01
+  integration_method: RK4
+
+monte_carlo:
+  runs: 3
+  base_seed: 7
+
+output:
+  format: csv          # csv or bin
+
+models:
+  - name: target
+    type: Target        # registered with ModelFactory::reg<T>("TypeName")
+    config: target_params.yaml
+    enabled: true
+
+  - name: missile
+    type: Missile
+    config: missile_params.yaml
+    enabled: true
+```
+
+## Generic scenario runner (`src/main.cpp`)
+
+One binary handles all scenarios. Run from the repo root:
+```bash
+./build/src/sim ex_1
+# Reads:  INPUT_DATA/ex_1/scenario.yaml
+# Writes: OUTPUT_DATA/ex_1/run0/, run1/, run2/
+```
+
+`main.cpp` responsibilities:
+1. Register all known model types with `ModelFactory`
+2. Instantiate models from scenario YAML
+3. Resolve model configs relative to `INPUT_DATA/<scenario>/`
+4. Wire inter-model dependencies (temporary — FastDDS will replace this)
+5. Run MC loop; output to `OUTPUT_DATA/<scenario>/`
+
+**Note:** Adding a new model type requires registering it in `src/main.cpp`:
 ```cpp
-// In the consuming model's header — store a typed pointer:
-class Autopilot : public Block {
-public:
-    void getsFrom(Missile* obj) { missile_ = obj; }
-    ...
-private:
-    Missile* missile_ = nullptr;
-};
-
-// In the supplying model's header — expose read-only accessors:
-class Missile : public Block {
-public:
-    ACCESS_FN(double, gamma)   // other models call missile->gamma_()
-    ...
-};
-
-// In main.cpp — wire them up before Sim::run():
-autopilot->getsFrom(missile);
-missile->getsFrom(autopilot);
+ModelFactory::reg<MyModel>("MyModel");
 ```
 
-## Per-model update rates (discrete/hybrid models)
-The sim integration step runs at the global `dt`. Each model controls its own discrete rate inside `update()` using `State::sample()`:
-```cpp
-void update() override {
-    // Discrete subsystem at 10 Hz:
-    if (State::sample(0.1)) {
-        a_cmd = k * (gamma_cmd - missile_->gamma_());
-    }
-    // Continuous physics (every substep):
-    gammad = a_cmd / v;
-}
-```
-Configure the discrete rate in the model's own YAML and read it in `loadConfig()`.
+## Adding a new model
 
-## Writing a new model — full template
+1. Create a GitHub repo `cmd-model-<name>` with this layout:
+   ```
+   cmd-model-<name>/
+   ├── CMakeLists.txt       ← see pattern below
+   ├── my_model.h           ← class declaration only
+   ├── my_model.cpp         ← all method definitions
+   └── default_params.yaml
+   ```
+
+2. Model `CMakeLists.txt` pattern:
+   ```cmake
+   cmake_minimum_required(VERSION 3.15)
+   project(cmd-model-<name> VERSION 0.1.0 LANGUAGES CXX)
+   set(CMAKE_CXX_STANDARD 17)
+
+   # Use osk from parent CMD project, or find installed package for standalone builds
+   if(NOT TARGET osk)
+       find_package(osk 1.0.0 REQUIRED)
+   endif()
+
+   add_library(<name> STATIC my_model.cpp)
+   target_include_directories(<name> PUBLIC
+       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+       $<INSTALL_INTERFACE:include>
+   )
+   target_link_libraries(<name> PUBLIC osk)
+   ```
+
+3. Clone into `external/`:
+   ```bash
+   git clone https://github.com/AlejandroZam/cmd-model-<name>.git --branch v0.1.0 external/cmd-model-<name>
+   ```
+
+4. Add `define_dependency` to `CMD/CMakeLists.txt`
+
+5. Add library to `src/CMakeLists.txt`: `target_link_libraries(sim PRIVATE ... <name>)`
+
+6. Register type in `src/main.cpp`: `ModelFactory::reg<MyModel>("MyModel");`
+
+7. Add `#include "my_model.h"` to `src/main.cpp`
+
+## Adding a new scenario
+
+1. Create `INPUT_DATA/<name>/scenario.yaml` + model param files
+2. Run `./build/src/sim <name>` from repo root — no CMake changes needed
+
+## Model template (header + cpp)
+
+**my_model.h:**
 ```cpp
 #pragma once
+#include "block.h"
+#include "noise.h"
+#include <string>
+#include <vector>
+
+class MyModel : public Block {
+public:
+    MyModel();
+    void loadConfig(const std::string& path) override;
+    void seed(uint64_t s) override;
+    void initialize() override;
+    void update() override;
+    void report() override;
+
+    ACCESS_FN(double, x)
+    double x = 0.0, xd = 0.0;
+
+private:
+    double   x0_ = 0.0, reportDt_ = 0.5;
+    Logger   logger_;
+    NoiseGen noise_;
+    std::vector<std::string> outputSignals_;
+};
+```
+
+**my_model.cpp:**
+```cpp
+#include "my_model.h"
 #include "sim.h"
 #include <yaml-cpp/yaml.h>
 #include <cstdio>
 
-class MyModel : public Block {
-public:
-    MyModel() : x(0.0), xd(0.0) {
-        addIntegrator(&x, &xd);
+MyModel::MyModel() {
+    addIntegrator(&x, &xd);
+    logger_.addSignal("t", &State::t);
+    logger_.addSignal("x", &x);
+}
+
+void MyModel::loadConfig(const std::string& path) {
+    YAML::Node cfg = YAML::LoadFile(path);
+    x0_       = cfg["model"]["initial_x"].as<double>(0.0);
+    reportDt_ = 1.0 / cfg["model"]["report_rate_hz"].as<double>(2.0);
+    noise_.loadConfig(cfg["noise"]["force"]);
+    if (cfg["output"] && cfg["output"]["signals"])
+        for (auto s : cfg["output"]["signals"])
+            outputSignals_.push_back(s.as<std::string>());
+}
+
+void MyModel::seed(uint64_t s) { noise_.seed(s); }
+
+void MyModel::initialize() {
+    x = x0_;
+    logger_.close();
+    if (!outputDir.empty())
+        logger_.open(outputDir + "/" + name, logFmt, outputSignals_);
+}
+
+void MyModel::update() { xd = /* f(x, t) */ + noise_.sample(); }
+
+void MyModel::report() {
+    if (State::sample(reportDt_) || State::tickfirst || State::ticklast) {
+        std::printf("[%s] t=%8.4f  x=%f\n", name.c_str(), State::t, x);
+        if (logger_.isOpen()) logger_.write();
     }
-
-    void loadConfig(const std::string& path) override {
-        YAML::Node cfg = YAML::LoadFile(path);
-        x0_       = cfg["model"]["initial_x"].as<double>(0.0);
-        reportDt_ = 1.0 / cfg["model"]["report_rate_hz"].as<double>(1.0);
-    }
-
-    void initialize() override {
-        x = x0_;
-        if (initCount == 0) std::printf("MyModel starting\n");
-    }
-
-    void update() override {
-        xd = /* f(x, t) */;
-    }
-
-    void report() override {
-        if (State::sample(reportDt_) || State::tickfirst || State::ticklast)
-            std::printf("%8.4f  x: %f\n", State::t, x);
-    }
-
-    ACCESS_FN(double, x)   // exposes x_() for other models
-
-    double x, xd;
-private:
-    double x0_ = 0.0, reportDt_ = 0.5;
-};
+}
 ```
 
-## YAML split — sim vs model
-`params.yaml` (sim-level, read in `main.cpp`):
-```yaml
-simulation:
-  tmax: 10.0
-  dt: 0.01
-  integration_method: RK4   # EULER, RK2, or RK4
+## OSK install / versioning
+
+- `cmd-simulations` is tagged `v1.0.0`. OSK installs via:
+  ```bash
+  cmake --install build/
+  ```
+  Generates `osk-config.cmake` + `osk-config-version.cmake` for `find_package(osk 1.0.0)`.
+
+- Model repos are tagged independently (e.g. `v0.1.0`). Each declares:
+  ```cmake
+  project(cmd-model-<name> VERSION 0.1.0 LANGUAGES CXX)
+  ```
+
+## Build
+
+```bash
+# First time: clone required models into external/
+git clone https://github.com/AlejandroZam/cmd-model-smd.git     --branch v0.1.0 external/cmd-model-smd
+git clone https://github.com/AlejandroZam/cmd-model-target.git  --branch v0.1.0 external/cmd-model-target
+git clone https://github.com/AlejandroZam/cmd-model-missile.git --branch v0.1.0 external/cmd-model-missile
+
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+
+# Run scenarios from repo root:
+cd ..
+./build/src/sim ex_0
+./build/src/sim ex_1
+
+# Visualise ex_1:
+python tools/visualise_ex1.py
 ```
 
-`<model_name>_params.yaml` (model-level, read in `loadConfig()`):
-```yaml
-model:
-  initial_position: 1.0
-  update_rate_hz: 100.0   # discrete subsystem rate
-  report_rate_hz: 2.0     # output rate
-  # ...physics params...
-```
-
-## Multiple named model instances (from main sim YAML)
-
-`params.yaml` `models:` list drives instantiation. Each entry has:
-```yaml
-models:
-  - name: smd_heavy           # unique instance name (used in output filenames and printf)
-    type: SpringMassDamper    # registered with ModelFactory::reg<T>("TypeName")
-    config: heavy_params.yaml # passed to loadConfig()
-    enabled: true             # set false to skip this instance entirely
-```
-
-`main.cpp` registers types, iterates the list, skips disabled entries, creates instances via `ModelFactory::create(type)`, and casts to set `name` / `outputDir` / `logFmt`.
-
-`ModelFactory` lives in `osk/factory.h`. Register once per type before the loop:
-```cpp
-ModelFactory::reg<SpringMassDamper>("SpringMassDamper");
-```
+Dependencies: `sudo apt-get install -y libyaml-cpp-dev libeigen3-dev`
 
 ## Output logging (`osk/logger.h`)
 
-`Logger` class writes CSV or binary per model instance. Models hold a `Logger logger_` member.
+Signal-registration logger — models register signals once in the constructor, `open()` filters to the subset declared in `output.signals` in the model YAML.
 
-In `initialize()` (stage 0 only):
 ```cpp
-if (!outputDir.empty())
-    logger_.open(outputDir + "/" + name, {"t","pos","vel"}, logFmt);
+// Constructor:
+logger_.addSignal("t",   &State::t);
+logger_.addSignal("pos", &pos);
+
+// initialize():
+logger_.open(outputDir + "/" + name, logFmt, outputSignals_);
+
+// report():
+if (logger_.isOpen()) logger_.write();
 ```
 
-In `report()`:
-```cpp
-if (logger_.isOpen()) logger_.write({State::t, pos, vel});
+## Noise (`osk/noise.h`)
+
+One `NoiseGen` instance per channel. Configure from YAML subkey:
+```yaml
+noise:
+  force:
+    distribution: gaussian   # gaussian / uniform / laplace / weibull
+    mean: 0.0
+    stddev: 0.05
 ```
+Call `noise_.seed(runSeed)` in `Block::seed()` for deterministic MC runs.
 
-**Binary format**: header = `uint32_t n_cols`, then for each col `uint32_t len` + `char[]` name; rows = packed `double[n_cols]`.
+## Monte Carlo (`osk/montecarlo.h`)
 
-`main.cpp` reads `output.dir` and `output.format` (csv/bin) from `params.yaml` and calls `fs::create_directories(outDir)` before instantiating models.
-
-## Adding a new example
-1. `mkdir examples/ex_N`
-2. Create `main.cpp`, `params.yaml`, model yaml files, `CMakeLists.txt` (copy ex_0 as template)
-3. In `main.cpp`: register model types, iterate `cfg["models"]`, wire with `getsFrom` if multi-model
-4. Add `add_subdirectory(examples/ex_N)` to root `CMakeLists.txt`
-5. Add `configure_file(...)` entries in the example's `CMakeLists.txt` for each yaml
-
-## Adding a new model
-- One model = one header in `models/`
-- Include `"sim.h"`, `"logger.h"`, `<yaml-cpp/yaml.h>`; no other OSK dependencies
-- Override `loadConfig`, `initialize`, `update`, `report`
-- Add public fields: `std::string name`, `std::string outputDir`, `LogFormat logFmt`
-- Use `ACCESS_FN` to expose outputs; define a typed `getsFrom()` for inputs
-- CMake include path already covers `models/` and `osk/` for all examples
-
-## Build system
-CMake + yaml-cpp. Build:
-```bash
-cd cmd/build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
-./examples/ex_0/ex_0   # runs from build/examples/ex_0/
+```yaml
+monte_carlo:
+  runs: 3
+  base_seed: 42
 ```
-Dependency: `sudo apt-get install -y libyaml-cpp-dev`
+Seed for run N = `baseSeed + N`. Output goes to `OUTPUT_DATA/<scenario>/run<N>/`.
 
 ## Status (as of session end)
-- OSK kernel: complete, compiles cleanly
-- `osk/factory.h`: ModelFactory — registers and creates Block subtypes by string name
-- `osk/logger.h`: Logger — CSV and binary file output per model instance
-- ex_0: two named SpringMassDamper instances (smd_heavy, smd_light), both writing CSV to `output/`
-- Features implemented: `initialize()`, `loadConfig()`, `ACCESS_FN`, `initCount`, `State::EVENT`, `IntegMethod` (EULER/RK2/RK4), per-model YAML, model-to-model interaction, named instances from YAML, enable/disable per model, CSV/binary logging
-- Next steps: add more examples/models demonstrating multi-model stages and model-to-model wiring
+- OSK kernel: complete, versioned at v1.0.0, install rules in place
+- `osk/trackable.h`: Trackable interface decoupling Missile from Target
+- Three model repos live on GitHub, each tagged v0.1.0:
+  - `AlejandroZam/cmd-model-smd`
+  - `AlejandroZam/cmd-model-target`
+  - `AlejandroZam/cmd-model-missile`
+- `cmake/define_dependency.cmake`: errors with exact clone command if model missing
+- `src/main.cpp`: generic scenario runner; inter-model wiring temporary (FastDDS next)
+- `INPUT_DATA/`: ex_0 (dual SMD, MC) and ex_1 (missile/target intercept, MC)
+- `tools/visualise_ex1.py`: 6-panel matplotlib plot from OUTPUT_DATA/ex_1
+- Next: FastDDS pub/sub for inter-model comms, Gazebo visualisation, model testing, VSCode extension
