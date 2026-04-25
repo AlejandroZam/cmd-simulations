@@ -5,6 +5,7 @@ model:
   max_accel: 200.0
   miss_distance: 20.0
   report_rate_hz: 2.0
+  target_topic: target
 
 noise:
   ax:

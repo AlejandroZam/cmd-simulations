@@ -13,18 +13,20 @@ include(CMakePackageConfigHelpers)
 # ── Dependencies ──────────────────────────────────────────────────────────────
 find_package(yaml-cpp REQUIRED)
 find_package(Eigen3 REQUIRED NO_MODULE)
+find_package(fastdds REQUIRED)
 
 # ── OSK kernel (static library) ───────────────────────────────────────────────
 add_library(osk STATIC
     osk/state.cpp
     osk/block.cpp
     osk/sim.cpp
+    osk/simdds.cpp
 )
 target_include_directories(osk PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/osk>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/osk>
 )
-target_link_libraries(osk PUBLIC Eigen3::Eigen yaml-cpp)
+target_link_libraries(osk PUBLIC Eigen3::Eigen yaml-cpp fastdds)
 
 # ── OSK install rules ─────────────────────────────────────────────────────────
 install(TARGETS osk

@@ -5,6 +5,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include "sim.h"
+#include "simdds.h"
 #include "factory.h"
 #include "montecarlo.h"
 #include "spring_mass_damper.h"
@@ -79,6 +80,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // ── DDS domain participant ────────────────────────────────────────────────
+    SimDDS::get().init();
+
     // ── Monte Carlo run loop ──────────────────────────────────────────────────
     for (int run = 0; run < MonteCarlo::runs; ++run) {
         MonteCarlo::currentRun = run;
@@ -96,8 +100,6 @@ int main(int argc, char* argv[]) {
         // Instantiate models
         std::vector<Block*> allModels;
         std::vector<Block*> stage0;
-        Target*  target  = nullptr;
-        Missile* missile = nullptr;
 
         for (auto& e : entries) {
             Block* b = ModelFactory::create(e.type);
@@ -107,15 +109,9 @@ int main(int argc, char* argv[]) {
             b->logFmt    = logFmt;
             b->seed(runSeed);
 
-            if (auto* t = dynamic_cast<Target*>(b))  target  = t;
-            if (auto* m = dynamic_cast<Missile*>(b)) missile = m;
-
             allModels.push_back(b);
             stage0.push_back(b);
         }
-
-        // Inter-model wiring (temporary — will be replaced by FastDDS pub/sub)
-        if (missile && target) missile->getsFrom(target);
 
         std::vector<std::vector<Block*>> vStage = { stage0 };
         double dts[] = { dt };
@@ -127,5 +123,6 @@ int main(int argc, char* argv[]) {
         for (auto* b : allModels) delete b;
     }
 
+    SimDDS::get().shutdown();
     return 0;
 }
