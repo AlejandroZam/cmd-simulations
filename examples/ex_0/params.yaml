@@ -1,0 +1,11 @@
+simulation:
+  tmax: 10.0          # total simulation time (seconds)
+  dt: 0.01            # integration time-step (seconds)
+  report_interval: 0.5  # console output every N seconds
+
+model:
+  mass: 1.0           # kg
+  damping: 0.3        # N·s/m  (underdamped: c < 2*sqrt(k*m))
+  stiffness: 4.0      # N/m
+  initial_position: 1.0  # m
+  initial_velocity: 0.0  # m/s

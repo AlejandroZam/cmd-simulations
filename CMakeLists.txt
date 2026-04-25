@@ -1,0 +1,27 @@
+cmake_minimum_required(VERSION 3.15)
+project(cmd_simulations LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+find_package(yaml-cpp REQUIRED)
+
+# ── OSK kernel (static library shared by all simulations) ────────────────────
+add_library(osk STATIC
+    osk/state.cpp
+    osk/block.cpp
+    osk/sim.cpp
+)
+target_include_directories(osk PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/osk)
+
+# ── Examples ──────────────────────────────────────────────────────────────────
+add_subdirectory(examples/ex_0)
+
+# To add a new example:
+#   1. Create examples/ex_N/ with main.cpp and CMakeLists.txt
+#   2. add_subdirectory(examples/ex_N) here
+#
+# To add a new model:
+#   1. Drop a header into models/  (derive from Block, include "sim.h")
+#   2. Add the models/ include path in that example's CMakeLists.txt
