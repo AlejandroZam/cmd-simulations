@@ -20,14 +20,18 @@ CMD/                              ← repo root (cmd-simulations, tagged v1.0.0)
 │   ├── logger.h                  ← Signal-registration CSV/binary logger
 │   ├── noise.h                   ← NoiseGen — Gaussian/Uniform/Laplace/Weibull
 │   ├── montecarlo.h              ← MonteCarlo run control
-│   └── yaml_eigen.h              ← yamlToVector<Eigen::VectorXd> helper
+│   ├── yaml_eigen.h              ← yamlToVector<Eigen::VectorXd> helper
+│   ├── simdds.h/cpp              ← SimDDS singleton (FastDDS domain participant)
+│   ├── dds_types.h               ← StateMsg POD + StateMsgType (memcpy TypeSupport)
+│   ├── dds_pub.h                 ← SimPublisher: init() in initialize(), publish() in report()
+│   └── dds_sub.h                 ← SimSubscriber: init() in initialize(), take() in update()
 ├── src/
 │   ├── CMakeLists.txt
 │   └── main.cpp                  ← Generic scenario runner (one binary for all scenarios)
 ├── external/                     ← gitignored; model repos checked out here
 │   ├── cmd-model-smd/            ← github.com/AlejandroZam/cmd-model-smd    v0.1.0
-│   ├── cmd-model-target/         ← github.com/AlejandroZam/cmd-model-target v0.1.0
-│   └── cmd-model-missile/        ← github.com/AlejandroZam/cmd-model-missile v0.1.0
+│   ├── cmd-model-target/         ← github.com/AlejandroZam/cmd-model-target v0.2.0
+│   └── cmd-model-missile/        ← github.com/AlejandroZam/cmd-model-missile v0.2.0
 ├── INPUT_DATA/                   ← committed; all scenario config files
 │   ├── ex_0/
 │   │   ├── scenario.yaml         ← sim settings + model list (the ONE input to sim)
@@ -318,8 +322,8 @@ void MyModel::report() {
 ```bash
 # First time: clone required models into external/
 git clone https://github.com/AlejandroZam/cmd-model-smd.git     --branch v0.1.0 external/cmd-model-smd
-git clone https://github.com/AlejandroZam/cmd-model-target.git  --branch v0.1.0 external/cmd-model-target
-git clone https://github.com/AlejandroZam/cmd-model-missile.git --branch v0.1.0 external/cmd-model-missile
+git clone https://github.com/AlejandroZam/cmd-model-target.git  --branch v0.2.0 external/cmd-model-target
+git clone https://github.com/AlejandroZam/cmd-model-missile.git --branch v0.2.0 external/cmd-model-missile
 
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
@@ -373,15 +377,48 @@ monte_carlo:
 ```
 Seed for run N = `baseSeed + N`. Output goes to `OUTPUT_DATA/<scenario>/run<N>/`.
 
+## FastDDS pub/sub (inter-model communication)
+
+Models communicate via DDS topics instead of direct pointer wiring.
+
+**Topic naming:** `"sim.<model_name>.state"` (e.g. `"sim.target.state"`)
+
+**Publishing (Target):**
+```cpp
+// header: SimPublisher publisher_;
+// initialize(): publisher_.init("sim." + name + ".state");
+// report():
+StateMsg msg{State::t, pos_.x(), pos_.y(), pos_.z(), vel_.x(), vel_.y(), vel_.z()};
+publisher_.publish(msg);
+```
+
+**Subscribing (Missile):**
+```cpp
+// header: SimSubscriber subscriber_; Eigen::Vector3d tpos_, tvel_; bool hasTargetData_;
+// model YAML: target_topic: target
+// initialize(): subscriber_.init("sim." + targetTopic_ + ".state");
+// update():
+StateMsg msg;
+if (subscriber_.take(msg)) { tpos_ = {msg.px,msg.py,msg.pz}; tvel_ = {msg.vx,msg.vy,msg.vz}; hasTargetData_ = true; }
+if (!hasTargetData_) return;
+// ... guidance using tpos_, tvel_
+```
+
+**Key implementation note:** `StateMsgType::max_serialized_type_size` MUST be set in the constructor (= sizeof(StateMsg)). If left at 0 (default), FastDDS cannot pre-allocate the serialization buffer and `write()` returns RETCODE_ERROR silently. Also implement `construct_sample()` for intraprocess optimization.
+
+**ZOH behaviour:** Target publishes every `report()` call. Missile reads in `update()`. Within an RK4 step, `take()` fires on k1 (new data), then returns false on k2/k3/k4 (missile keeps last tpos_/tvel_). One-timestep delay is inherent and acceptable.
+
+**main.cpp:** Call `SimDDS::get().init()` before the MC loop, `SimDDS::get().shutdown()` after.
+
 ## Status (as of session end)
 - OSK kernel: complete, versioned at v1.0.0, install rules in place
-- `osk/trackable.h`: Trackable interface decoupling Missile from Target
-- Three model repos live on GitHub, each tagged v0.1.0:
-  - `AlejandroZam/cmd-model-smd`
-  - `AlejandroZam/cmd-model-target`
-  - `AlejandroZam/cmd-model-missile`
+- FastDDS 3.2.2 integrated: SimDDS singleton, SimPublisher, SimSubscriber, StateMsg type
+- Model repos on GitHub:
+  - `AlejandroZam/cmd-model-smd` v0.1.0
+  - `AlejandroZam/cmd-model-target` v0.2.0 — publishes state via DDS
+  - `AlejandroZam/cmd-model-missile` v0.2.0 — subscribes to target via DDS, no Trackable pointer
 - `cmake/define_dependency.cmake`: errors with exact clone command if model missing
-- `src/main.cpp`: generic scenario runner; inter-model wiring temporary (FastDDS next)
+- `src/main.cpp`: generic scenario runner; no model-to-model pointer wiring needed
 - `INPUT_DATA/`: ex_0 (dual SMD, MC) and ex_1 (missile/target intercept, MC)
 - `tools/visualise_ex1.py`: 6-panel matplotlib plot from OUTPUT_DATA/ex_1
-- Next: FastDDS pub/sub for inter-model comms, Gazebo visualisation, model testing, VSCode extension
+- Next: update define_dependency clone commands to v0.2.0, Gazebo visualisation, model testing
