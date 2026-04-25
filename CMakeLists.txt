@@ -17,8 +17,18 @@ add_library(osk STATIC
 target_include_directories(osk PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/osk)
 target_link_libraries(osk PUBLIC Eigen3::Eigen yaml-cpp)
 
+# ── Models (static library shared by all examples) ───────────────────────────
+add_library(models STATIC
+    models/spring_mass_damper.cpp
+    models/missile.cpp
+    models/target.cpp
+)
+target_include_directories(models PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/models)
+target_link_libraries(models PUBLIC osk)
+
 # ── Examples ──────────────────────────────────────────────────────────────────
 add_subdirectory(examples/ex_0)
+add_subdirectory(examples/ex_1)
 
 # To add a new example:
 #   1. Create examples/ex_N/ with main.cpp and CMakeLists.txt

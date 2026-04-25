@@ -1,5 +1,6 @@
 #pragma once
 #include "state.h"
+#include "logger.h"
 #include <string>
 #include <vector>
 
@@ -40,6 +41,11 @@ public:
 
     // Incremented by the kernel each time initialize() is called.
     // Use in initialize() to distinguish stage 0, 1, 2, ...
-    int         initCount = 0;
+    int         initCount  = 0;
     std::string configPath;
+
+    // Set by main.cpp before Sim::run(); available to all model overrides.
+    std::string name;
+    std::string outputDir;
+    LogFormat   logFmt = LogFormat::CSV;
 };
