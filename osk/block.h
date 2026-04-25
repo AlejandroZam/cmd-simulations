@@ -23,13 +23,18 @@ public:
     // Override to reseed all NoiseGen members deterministically per MC run.
     virtual void seed(uint64_t /*s*/) {}
 
+    // Called once per time step BEFORE integration.
+    // Override for discrete logic: read DDS, sample noise, check events,
+    // mode switches, self-destruct. State::substep is always false here.
+    virtual void eventUpdate()  {}
+
     // Called 4x per time step (RK4) to compute state derivatives.
-    // Use State::sample() to gate discrete operations.
-    virtual void update()     {}
+    // Pure math only — set xd from current x. Never check time or fire events.
+    virtual void derivatives()  {}
 
     // Called once per time step after integration. Use State::sample(),
     // State::tickfirst, and State::ticklast to control output.
-    virtual void report()     {}
+    virtual void report()       {}
 
     void addIntegrator(double* x, double* xd);
 

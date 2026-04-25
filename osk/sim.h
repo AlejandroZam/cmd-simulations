@@ -27,7 +27,8 @@ private:
     void stepEuler (std::vector<Block*>& stage, std::vector<State*>& states, double dt);
     void stepRK2   (std::vector<Block*>& stage, std::vector<State*>& states, double dt);
     void stepRK4   (std::vector<Block*>& stage, std::vector<State*>& states, double dt);
-    void callInitialize(std::vector<Block*>& stage);
-    void callUpdate    (std::vector<Block*>& stage);
-    void callReport    (std::vector<Block*>& stage);
+    void callInitialize  (std::vector<Block*>& stage);
+    void callEventUpdate (std::vector<Block*>& stage);
+    void callDerivatives (std::vector<Block*>& stage);
+    void callReport      (std::vector<Block*>& stage);
 };

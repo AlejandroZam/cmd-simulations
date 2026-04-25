@@ -15,8 +15,10 @@ models:
     type: Target
     config: target_params.yaml
     enabled: true
+    order: 0
 
   - name: missile
     type: Missile
     config: missile_params.yaml
     enabled: true
+    order: 1

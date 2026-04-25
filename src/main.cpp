@@ -66,15 +66,23 @@ int main(int argc, char* argv[]) {
     ModelFactory::reg<Missile>("Missile");
     ModelFactory::reg<Target>("Target");
 
-    // ── Collect enabled model entries ─────────────────────────────────────────
-    struct ModelEntry { std::string name, type, config; };
+    // ── Collect enabled model entries (sorted by optional 'order' field) ────────
+    struct ModelEntry { std::string name, type, config; int order; };
     std::vector<ModelEntry> entries;
     for (auto e : cfg["models"]) {
         if (!e["enabled"].as<bool>(true)) continue;
+        if (!e["order"]) {
+            std::cerr << "Model '" << e["name"].as<std::string>()
+                      << "' is missing required field 'order' in " << scenarioYaml << "\n";
+            return 1;
+        }
         entries.push_back({ e["name"].as<std::string>(),
                             e["type"].as<std::string>(),
-                            resolveConfig(e, scenarioDir) });
+                            resolveConfig(e, scenarioDir),
+                            e["order"].as<int>() });
     }
+    std::stable_sort(entries.begin(), entries.end(),
+                     [](const ModelEntry& a, const ModelEntry& b){ return a.order < b.order; });
     if (entries.empty()) {
         std::cerr << "No models enabled in scenario " << scenarioName << ".\n";
         return 1;

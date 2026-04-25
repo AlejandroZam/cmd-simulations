@@ -22,8 +22,12 @@ void Sim::callInitialize(std::vector<Block*>& stage) {
     }
 }
 
-void Sim::callUpdate(std::vector<Block*>& stage) {
-    for (auto* b : stage) b->update();
+void Sim::callEventUpdate(std::vector<Block*>& stage) {
+    for (auto* b : stage) b->eventUpdate();
+}
+
+void Sim::callDerivatives(std::vector<Block*>& stage) {
+    for (auto* b : stage) b->derivatives();
 }
 
 void Sim::callReport(std::vector<Block*>& stage) {
@@ -34,7 +38,7 @@ void Sim::stepEuler(std::vector<Block*>& stage, std::vector<State*>& states, dou
     double t0 = State::t;
 
     State::substep = false;
-    callUpdate(stage);
+    callDerivatives(stage);
     for (auto* s : states)
         *s->x = *s->x + *s->xd * dt;
 
@@ -49,13 +53,13 @@ void Sim::stepRK2(std::vector<Block*>& stage, std::vector<State*>& states, doubl
 
     // k1
     State::substep = false;
-    callUpdate(stage);
+    callDerivatives(stage);
     for (auto* s : states) { s->k1 = *s->xd; *s->x = s->x0 + s->k1 * dt; }
 
     // k2
     State::t       = t0 + dt;
     State::substep = true;
-    callUpdate(stage);
+    callDerivatives(stage);
     for (auto* s : states) s->k2 = *s->xd;
 
     // Combine (Heun's method)
@@ -73,22 +77,22 @@ void Sim::stepRK4(std::vector<Block*>& stage, std::vector<State*>& states, doubl
 
     // k1
     State::substep = false;
-    callUpdate(stage);
+    callDerivatives(stage);
     for (auto* s : states) { s->k1 = *s->xd; *s->x = s->x0 + s->k1 * dt * 0.5; }
 
     // k2
     State::t       = t0 + dt * 0.5;
     State::substep = true;
-    callUpdate(stage);
+    callDerivatives(stage);
     for (auto* s : states) { s->k2 = *s->xd; *s->x = s->x0 + s->k2 * dt * 0.5; }
 
     // k3
-    callUpdate(stage);
+    callDerivatives(stage);
     for (auto* s : states) { s->k3 = *s->xd; *s->x = s->x0 + s->k3 * dt; }
 
     // k4
     State::t = t0 + dt;
-    callUpdate(stage);
+    callDerivatives(stage);
     for (auto* s : states) s->k4 = *s->xd;
 
     // Combine
@@ -125,13 +129,23 @@ void Sim::run() {
 
         // Initial tick for this stage
         State::tickfirst = true;
-        callUpdate(stage);
+        callEventUpdate(stage);
+        callDerivatives(stage);
         callReport(stage);
         State::tickfirst = false;
 
         Sim::stop = 0;
 
         while (State::t < tmax_ - dt * 0.5 && Sim::stop == 0) {
+            callEventUpdate(stage);
+
+            if (Sim::stop < 0) {
+                State::ticklast = true;
+                callReport(stage);
+                State::ticklast = false;
+                break;
+            }
+
             step(stage, states, dt);
 
             bool last = (State::t >= tmax_ - dt * 0.5) || (Sim::stop < 0);

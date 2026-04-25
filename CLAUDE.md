@@ -69,7 +69,8 @@ Abstract base class for all models. Derive from this.
 - `std::string name`, `std::string outputDir`, `LogFormat logFmt` — set by main.cpp before `Sim::run()`
 - `virtual void loadConfig(const std::string& path)` — override to load model YAML
 - `virtual void initialize()` — called once per stage; use `initCount` to distinguish stages
-- `virtual void update()` — define state derivatives; called 4× per step (RK4)
+- `virtual void eventUpdate()` — discrete logic once per frame **before** integration: DDS reads, noise sampling, event checks (intercept, self-destruct, mode switches). `State::substep` is always false here — no guards needed.
+- `virtual void derivatives()` — pure math: set `xd` from current `x`; called 4× per RK4 step. Never check time or fire events.
 - `virtual void report()` — called once per full time step after integration
 - `virtual void seed(uint64_t s)` — override to reseed all NoiseGen members per MC run
 - `ACCESS_FN(type, var)` macro — generates a read-only accessor `var_()`:
@@ -156,11 +157,13 @@ models:
     type: Target        # registered with ModelFactory::reg<T>("TypeName")
     config: target_params.yaml
     enabled: true
+    order: 0            # required; determines update/report execution order
 
   - name: missile
     type: Missile
     config: missile_params.yaml
     enabled: true
+    order: 1
 ```
 
 ## Generic scenario runner (`src/main.cpp`)
@@ -248,7 +251,8 @@ public:
     void loadConfig(const std::string& path) override;
     void seed(uint64_t s) override;
     void initialize() override;
-    void update() override;
+    void eventUpdate() override;
+    void derivatives() override;
     void report() override;
 
     ACCESS_FN(double, x)
@@ -294,7 +298,9 @@ void MyModel::initialize() {
         logger_.open(outputDir + "/" + name, logFmt, outputSignals_);
 }
 
-void MyModel::update() { xd = /* f(x, t) */ + noise_.sample(); }
+void MyModel::eventUpdate() { forceNoise_ = noise_.sample(); }
+
+void MyModel::derivatives() { xd = /* f(x, t) */ + forceNoise_; }
 
 void MyModel::report() {
     if (State::sample(reportDt_) || State::tickfirst || State::ticklast) {

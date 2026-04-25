@@ -15,8 +15,10 @@ models:
     type: SpringMassDamper
     config: smd_heavy_params.yaml
     enabled: true
+    order: 0
 
   - name: smd_light
     type: SpringMassDamper
     config: smd_light_params.yaml
     enabled: true
+    order: 1
