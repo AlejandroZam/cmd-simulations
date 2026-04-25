@@ -416,7 +416,7 @@ if (!hasTargetData_) return;
 
 **main.cpp:** Call `SimDDS::get().init()` before the MC loop, `SimDDS::get().shutdown()` after.
 
-## Status (as of session end)
+## Status (as of 2026-04-25)
 - OSK kernel: complete, versioned at v1.0.0, install rules in place
 - FastDDS 3.2.2 integrated: SimDDS singleton, SimPublisher, SimSubscriber, StateMsg type
 - Model repos on GitHub:
@@ -427,4 +427,6 @@ if (!hasTargetData_) return;
 - `src/main.cpp`: generic scenario runner; no model-to-model pointer wiring needed
 - `INPUT_DATA/`: ex_0 (dual SMD, MC) and ex_1 (missile/target intercept, MC)
 - `tools/visualise_ex1.py`: 6-panel matplotlib plot from OUTPUT_DATA/ex_1
+- `README.md`: added at repo root with build/run/configure instructions
+- `INPUT_DATA/ex_1/missile_params.yaml`: tightened intercept threshold (`miss_distance` 20→5 m); increased acceleration noise stddev (ax 0.5→3.1, ay 0.5→2.3, az 0.5→4.5) to stress-test MC spread
 - Next: update define_dependency clone commands to v0.2.0, Gazebo visualisation, model testing
