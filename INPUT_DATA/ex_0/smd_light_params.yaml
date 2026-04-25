@@ -7,14 +7,14 @@ model:
   report_rate_hz: 2.0
 
 noise:
-  force:                       # additive force disturbance into vel_dot
+  force:
     distribution: uniform
     min: -0.02
     max:  0.02
-  measurement:                 # additive noise on position output
+  measurement:
     distribution: weibull
     shape: 2.0
     scale: 0.005
 
 output:
-  signals: [t, pos, vel]      # pos_noisy omitted — not logged for this instance
+  signals: [t, pos, vel]

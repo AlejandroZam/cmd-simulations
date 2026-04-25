@@ -1,0 +1,33 @@
+4 main deliverables
+
+1. sim alterations
+    a. ability to use pubsub for model to model coms.
+    b. real time and non-real time
+    c. ability to communicate to robot code
+
+
+2. model consumption and intergation
+    a. each model need to be able to be store in github as its own repo
+    b. be able to be pull down while running cmake if you give it its url 
+    c. kept in a external folder
+    d. depend on sim frame work as lib
+    e. visualization code kept separately in framework tools
+    f. testing for each model 
+
+3. visualization 
+    a in gazebo
+
+4.vscode.ext
+    a- for model creation from template 
+    b- for scenario creation 
+
+
+
+
+
+
+
+
+
+
+

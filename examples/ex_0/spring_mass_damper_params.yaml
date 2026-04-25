@@ -1,8 +1,0 @@
-model:
-  mass: 1.0               # kg
-  damping: 0.3            # N·s/m  (underdamped: c < 2*sqrt(k*m))
-  stiffness: 4.0          # N/m
-  initial_position: 1.0   # m
-  initial_velocity: 0.0   # m/s
-  update_rate_hz: 100.0   # discrete derivative update rate
-  report_rate_hz: 2.0     # console output rate (every 0.5 seconds)

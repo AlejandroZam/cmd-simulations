@@ -1,0 +1,22 @@
+simulation:
+  tmax: 10.0
+  dt: 0.01
+  integration_method: RK4   # EULER, RK2, or RK4
+
+monte_carlo:
+  runs: 3
+  base_seed: 42
+
+output:
+  format: csv
+
+models:
+  - name: smd_heavy
+    type: SpringMassDamper
+    config: smd_heavy_params.yaml
+    enabled: true
+
+  - name: smd_light
+    type: SpringMassDamper
+    config: smd_light_params.yaml
+    enabled: true

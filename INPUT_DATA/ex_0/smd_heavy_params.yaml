@@ -7,14 +7,14 @@ model:
   report_rate_hz: 2.0
 
 noise:
-  force:                       # additive force disturbance into vel_dot
+  force:
     distribution: gaussian
     mean: 0.0
     stddev: 0.05
-  measurement:                 # additive noise on position output
+  measurement:
     distribution: laplace
     location: 0.0
     scale: 0.003
 
 output:
-  signals: [t, pos, vel, pos_noisy]   # logged columns; omit to log all registered signals
+  signals: [t, pos, vel, pos_noisy]

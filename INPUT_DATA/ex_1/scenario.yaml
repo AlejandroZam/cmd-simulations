@@ -8,7 +8,6 @@ monte_carlo:
   base_seed: 7
 
 output:
-  dir: "output"
   format: csv
 
 models:

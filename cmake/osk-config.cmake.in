@@ -1,0 +1,8 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(yaml-cpp REQUIRED)
+find_dependency(Eigen3 REQUIRED NO_MODULE)
+
+include("${CMAKE_CURRENT_LIST_DIR}/osk-targets.cmake")
+check_required_components(osk)
