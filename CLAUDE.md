@@ -416,17 +416,20 @@ if (!hasTargetData_) return;
 
 **main.cpp:** Call `SimDDS::get().init()` before the MC loop, `SimDDS::get().shutdown()` after.
 
-## Status (as of 2026-04-25)
+## Status (as of 2026-05-15)
 - OSK kernel: complete, versioned at v1.0.0, install rules in place
 - FastDDS 3.2.2 integrated: SimDDS singleton, SimPublisher, SimSubscriber, StateMsg type
 - Model repos on GitHub:
   - `AlejandroZam/cmd-model-smd` v0.1.0
-  - `AlejandroZam/cmd-model-target` v0.2.0 — publishes state via DDS
-  - `AlejandroZam/cmd-model-missile` v0.2.0 — subscribes to target via DDS, no Trackable pointer
+  - `AlejandroZam/cmd-model-target` v0.2.0 — publishes state via DDS; streams UDP to VizBridge in `report()`
+  - `AlejandroZam/cmd-model-missile` v0.2.0 — subscribes to target via DDS; streams UDP to VizBridge in `report()`
 - `cmake/define_dependency.cmake`: errors with exact clone command if model missing
-- `src/main.cpp`: generic scenario runner; no model-to-model pointer wiring needed
+- `src/main.cpp`: generic scenario runner; reads optional `visualization:` block from scenario YAML; calls `VizBridge::get().init/sendEvent/shutdown`
 - `INPUT_DATA/`: ex_0 (dual SMD, MC) and ex_1 (missile/target intercept, MC)
-- `tools/visualise_ex1.py`: 6-panel matplotlib plot from OUTPUT_DATA/ex_1
+- `osk/viz_bridge.h`: header-only UDP singleton (`VizBridge`); 72-byte `VizPacket` (msg_type, entity_id, run_id, t, pos, vel, range); no-op when not initialized
+- `tools/viz_realtime.py`: real-time UDP replay visualizer — 3-D trajectory panel + range-vs-time panel; buffers full sim then replays at configurable speed (`--speed`); run before sim in a separate terminal
+- `tools/visualise_ex1.py`: 6-panel matplotlib post-run plot from OUTPUT_DATA/ex_1
+- `INPUT_DATA/ex_1/scenario.yaml`: `visualization.enabled: true`, port 9999
 - `README.md`: added at repo root with build/run/configure instructions
 - `INPUT_DATA/ex_1/missile_params.yaml`: tightened intercept threshold (`miss_distance` 20→5 m); increased acceleration noise stddev (ax 0.5→3.1, ay 0.5→2.3, az 0.5→4.5) to stress-test MC spread
-- Next: update define_dependency clone commands to v0.2.0, Gazebo visualisation, model testing
+- Next: Gazebo visualisation, model unit testing

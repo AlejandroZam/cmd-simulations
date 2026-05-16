@@ -10,6 +10,11 @@ monte_carlo:
 output:
   format: csv
 
+visualization:
+  enabled: true
+  host: "127.0.0.1"
+  port: 9999
+
 models:
   - name: target
     type: Target

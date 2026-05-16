@@ -6,6 +6,7 @@
 
 #include "sim.h"
 #include "simdds.h"
+#include "viz_bridge.h"
 #include "factory.h"
 #include "montecarlo.h"
 #include "spring_mass_damper.h"
@@ -91,6 +92,15 @@ int main(int argc, char* argv[]) {
     // ── DDS domain participant ────────────────────────────────────────────────
     SimDDS::get().init();
 
+    // ── Visualization bridge (UDP, optional) ──────────────────────────────────
+    if (cfg["visualization"] && cfg["visualization"]["enabled"].as<bool>(false)) {
+        auto   v    = cfg["visualization"];
+        auto   host = v["host"].as<std::string>("127.0.0.1");
+        auto   port = static_cast<uint16_t>(v["port"].as<int>(9999));
+        VizBridge::get().init(host.c_str(), port);
+        std::printf("[viz] Streaming to UDP %s:%d\n", host.c_str(), port);
+    }
+
     // ── Monte Carlo run loop ──────────────────────────────────────────────────
     for (int run = 0; run < MonteCarlo::runs; ++run) {
         MonteCarlo::currentRun = run;
@@ -124,13 +134,15 @@ int main(int argc, char* argv[]) {
         std::vector<std::vector<Block*>> vStage = { stage0 };
         double dts[] = { dt };
 
+        VizBridge::get().sendEvent(VizBridge::MSG_RUN_START, static_cast<uint16_t>(run));
         Sim* sim = new Sim(dts, tmax, vStage, method);
         sim->run();
-
         delete sim;
         for (auto* b : allModels) delete b;
+        VizBridge::get().sendEvent(VizBridge::MSG_RUN_END, static_cast<uint16_t>(run));
     }
 
     SimDDS::get().shutdown();
+    VizBridge::get().shutdown();
     return 0;
 }
