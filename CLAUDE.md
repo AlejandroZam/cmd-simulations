@@ -189,15 +189,33 @@ ModelFactory::reg<MyModel>("MyModel");
 
 ## Adding a new model
 
+### Option A — Local model (quickest, lives inside this repo)
+
+```bash
+python tools/new_model.py MyModel
+```
+
+This generates `models/MyModel/` with the full skeleton and automatically patches
+`src/registered_models.cpp`, `src/CMakeLists.txt`, and root `CMakeLists.txt`.
+No other files need touching. Then:
+
+1. Edit `models/MyModel/include/my_model.h` — declare your class
+2. Edit `models/MyModel/src/my_model.cpp` — implement dynamics
+3. Edit `models/MyModel/Config/default_params.yaml`
+4. `cmake --build build`
+5. Add `type: MyModel` to your scenario YAML
+
+### Option B — External model (separate GitHub repo, versioned)
+
 1. Create a GitHub repo `cmd-model-<name>` with this layout:
    ```
    cmd-model-<name>/
    ├── CMakeLists.txt
    ├── README.md
    ├── include/
-   │   └── my_model.h       ← class declaration only
+   │   └── my_model.h
    ├── src/
-   │   └── my_model.cpp     ← all method definitions
+   │   └── my_model.cpp
    ├── Config/
    │   └── default_params.yaml
    └── doc/
@@ -210,7 +228,6 @@ ModelFactory::reg<MyModel>("MyModel");
    project(cmd-model-<name> VERSION 0.1.0 LANGUAGES CXX)
    set(CMAKE_CXX_STANDARD 17)
 
-   # Use osk from parent CMD project, or find installed package for standalone builds
    if(NOT TARGET osk)
        find_package(osk 1.0.0 REQUIRED)
    endif()
@@ -223,22 +240,21 @@ ModelFactory::reg<MyModel>("MyModel");
    target_link_libraries(<name> PUBLIC osk)
 
    install(TARGETS <name> EXPORT <name>-targets ARCHIVE DESTINATION lib)
-   install(FILES include/my_model.h        DESTINATION include)
-   install(FILES Config/default_params.yaml DESTINATION share/cmd-model-<name>)
+   install(FILES include/my_model.h         DESTINATION include)
+   install(FILES Config/default_params.yaml  DESTINATION share/cmd-model-<name>)
    ```
 
-3. Clone into `external/`:
+3. Clone into `external/` and add to root `CMakeLists.txt`:
    ```bash
-   git clone https://github.com/AlejandroZam/cmd-model-<name>.git --branch v0.1.0 external/cmd-model-<name>
+   git clone https://github.com/<user>/cmd-model-<name>.git --branch v0.1.0 external/cmd-model-<name>
+   ```
+   ```cmake
+   define_dependency(NAME cmd-model-<name> REPO ... VERSION 0.1.0)
    ```
 
-4. Add `define_dependency` to `CMD/CMakeLists.txt`
+4. Add library to `src/CMakeLists.txt` (inside the `MODEL_LIBS` sentinel block)
 
-5. Add library to `src/CMakeLists.txt`: `target_link_libraries(sim PRIVATE ... <name>)`
-
-6. Register type in `src/main.cpp`: `ModelFactory::reg<MyModel>("MyModel");`
-
-7. Add `#include "my_model.h"` to `src/main.cpp`
+5. Add `#include` and `ModelFactory::reg<>` to `src/registered_models.cpp` (inside the sentinel blocks)
 
 ## Adding a new scenario
 
@@ -430,15 +446,17 @@ if (!hasTargetData_) return;
 - OSK kernel: complete, versioned at v1.0.0, install rules in place
 - FastDDS 3.2.2 integrated: SimDDS singleton, SimPublisher, SimSubscriber, StateMsg type
 - Model repos on GitHub:
-  - `AlejandroZam/cmd-model-smd` v0.1.0
-  - `AlejandroZam/cmd-model-target` v0.2.0 — publishes state via DDS; streams UDP to VizBridge in `report()`
-  - `AlejandroZam/cmd-model-missile` v0.2.0 — subscribes to target via DDS; streams UDP to VizBridge in `report()`
+  - `AlejandroZam/cmd-model-smd` v0.1.0 — restructured: `include/`, `src/`, `Config/`, `doc/`
+  - `AlejandroZam/cmd-model-target` v0.2.0 — restructured; publishes state via DDS; streams UDP to VizBridge in `report()`
+  - `AlejandroZam/cmd-model-missile` v0.2.0 — restructured; subscribes to target via DDS; streams UDP to VizBridge in `report()`
 - `cmake/define_dependency.cmake`: errors with exact clone command if model missing
-- `src/main.cpp`: generic scenario runner; reads optional `visualization:` block from scenario YAML; calls `VizBridge::get().init/sendEvent/shutdown`
+- `src/main.cpp`: generic scenario runner; reads optional `visualization:` block from scenario YAML; calls `VizBridge::get().init/sendEvent/shutdown`; model registrations moved out
+- `src/registered_models.cpp`: centralises all `ModelFactory::reg<>` calls and model `#include`s; exposes `registerAllModels()` called once from `main()`; sentinel comments allow `new_model.py` to patch it automatically
 - `INPUT_DATA/`: ex_0 (dual SMD, MC) and ex_1 (missile/target intercept, MC)
 - `osk/viz_bridge.h`: header-only UDP singleton (`VizBridge`); 72-byte `VizPacket` (msg_type, entity_id, run_id, t, pos, vel, range); no-op when not initialized
 - `tools/viz_realtime.py`: real-time UDP replay visualizer — 3-D trajectory panel + range-vs-time panel; buffers full sim then replays at configurable speed (`--speed`); run before sim in a separate terminal
 - `tools/visualise_ex1.py`: 6-panel matplotlib post-run plot from OUTPUT_DATA/ex_1
+- `tools/new_model.py`: scaffold — `python tools/new_model.py MyModel` generates `models/MyModel/` skeleton and auto-patches `src/registered_models.cpp`, `src/CMakeLists.txt`, and root `CMakeLists.txt`; no manual edits needed
 - `INPUT_DATA/ex_1/scenario.yaml`: `visualization.enabled: true`, port 9999
 - `README.md`: added at repo root with build/run/configure instructions
 - `INPUT_DATA/ex_1/missile_params.yaml`: tightened intercept threshold (`miss_distance` 20→5 m); increased acceleration noise stddev (ax 0.5→3.1, ay 0.5→2.3, az 0.5→4.5) to stress-test MC spread
