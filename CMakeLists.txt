@@ -77,5 +77,9 @@ define_dependency(
     VERSION 0.1.0
 )
 
+# ── Local models (managed by tools/new_model.py) ──────────────────────────────
+# === LOCAL_MODEL_SUBDIRS_BEGIN ===
+# === LOCAL_MODEL_SUBDIRS_END ===
+
 # ── Scenario runner ───────────────────────────────────────────────────────────
 add_subdirectory(src)

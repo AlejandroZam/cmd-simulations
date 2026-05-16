@@ -9,9 +9,8 @@
 #include "viz_bridge.h"
 #include "factory.h"
 #include "montecarlo.h"
-#include "spring_mass_damper.h"
-#include "missile.h"
-#include "target.h"
+
+void registerAllModels();
 
 namespace fs = std::filesystem;
 
@@ -63,9 +62,7 @@ int main(int argc, char* argv[]) {
     LogFormat   logFmt = (fmtStr == "bin") ? LogFormat::BIN : LogFormat::CSV;
 
     // ── Register all known model types ────────────────────────────────────────
-    ModelFactory::reg<SpringMassDamper>("SpringMassDamper");
-    ModelFactory::reg<Missile>("Missile");
-    ModelFactory::reg<Target>("Target");
+    registerAllModels();
 
     // ── Collect enabled model entries (sorted by optional 'order' field) ────────
     struct ModelEntry { std::string name, type, config; int order; };
