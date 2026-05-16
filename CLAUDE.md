@@ -192,10 +192,16 @@ ModelFactory::reg<MyModel>("MyModel");
 1. Create a GitHub repo `cmd-model-<name>` with this layout:
    ```
    cmd-model-<name>/
-   ├── CMakeLists.txt       ← see pattern below
-   ├── my_model.h           ← class declaration only
-   ├── my_model.cpp         ← all method definitions
-   └── default_params.yaml
+   ├── CMakeLists.txt
+   ├── README.md
+   ├── include/
+   │   └── my_model.h       ← class declaration only
+   ├── src/
+   │   └── my_model.cpp     ← all method definitions
+   ├── Config/
+   │   └── default_params.yaml
+   └── doc/
+       └── model_description.md
    ```
 
 2. Model `CMakeLists.txt` pattern:
@@ -209,12 +215,16 @@ ModelFactory::reg<MyModel>("MyModel");
        find_package(osk 1.0.0 REQUIRED)
    endif()
 
-   add_library(<name> STATIC my_model.cpp)
+   add_library(<name> STATIC src/my_model.cpp)
    target_include_directories(<name> PUBLIC
-       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
        $<INSTALL_INTERFACE:include>
    )
    target_link_libraries(<name> PUBLIC osk)
+
+   install(TARGETS <name> EXPORT <name>-targets ARCHIVE DESTINATION lib)
+   install(FILES include/my_model.h        DESTINATION include)
+   install(FILES Config/default_params.yaml DESTINATION share/cmd-model-<name>)
    ```
 
 3. Clone into `external/`:
